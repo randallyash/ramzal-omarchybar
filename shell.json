@@ -1,0 +1,82 @@
+{
+  "bar": {
+    "centerAnchor": "ramzal.clock",
+    "layout": {
+      "center": [
+        {
+          "id": "ramzal.indicators"
+        },
+        {
+          "format": "dddd HH:mm",
+          "formatAlt": "d MMMM 'W'ww yyyy",
+          "id": "ramzal.clock",
+          "verticalFormat": "HH\n—\nmm"
+        },
+        {
+          "id": "omarchy.keyboard-layout"
+        },
+        {
+          "id": "omarchy.weather"
+        },
+        {
+          "alertMinIntensity": "Moderate",
+          "alertRadiusKm": 100,
+          "alertsEnabled": true,
+          "id": "eduardodallecort.weather-radar"
+        },
+        {
+          "id": "omarchy.system-update"
+        }
+      ],
+      "left": [
+        {
+          "id": "ramzal.menu"
+        },
+        {
+          "id": "ramzal.workspaces"
+        },
+        {
+          "id": "ianswope.apple-music"
+        }
+      ],
+      "right": [
+        {
+          "id": "omarchy.agents"
+        },
+        {
+          "id": "ramzal.tray",
+          "pinned": [
+            "steam"
+          ]
+        },
+        {
+          "id": "omarchy.bluetooth"
+        },
+        {
+          "id": "ramzal.network"
+        },
+        {
+          "id": "omarchy.audio"
+        },
+        {
+          "id": "omarchy.monitor"
+        },
+        {
+          "id": "omarchy.power"
+        }
+      ]
+    },
+    "position": "top",
+    "transparent": false
+  },
+  "idle": {
+    "lock": 480,
+    "screensaver": 240
+  },
+  "plugins": [
+    {
+      "id": "ramzal.bar-icons"
+    }
+  ],
+  "version": 1
+}

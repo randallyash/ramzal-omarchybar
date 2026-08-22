@@ -1,0 +1,13 @@
+# User override layered on the active theme. Survives theme switches.
+# Default bar height is 26px. Sized for 1.25x monitor scale so the bar
+# and icons stay large after dropping from 1.6x.
+# Icon tokens are applied by ~/.config/omarchy/plugins/ramzal.bar-icons
+# (stock Style.qml only honors size-horizontal / size-vertical).
+
+[bar]
+size-horizontal = 42
+size-vertical = 44
+icon-slot = 40
+icon-canvas = 26
+icon-font = 21
+status-slot = 32

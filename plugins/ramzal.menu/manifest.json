@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "ramzal.menu",
+  "name": "Omarchy menu logo",
+  "version": "1.0.0",
+  "author": "ramzal",
+  "description": "Omarchy menu button with a larger logo",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchy menu logo",
+    "description": "Launches the Omarchy menu",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "ramzal.bar-icons",
+  "name": "Bar icon size",
+  "version": "1.0.0",
+  "author": "ramzal",
+  "description": "Applies [bar] icon-slot, icon-canvas, icon-font, and status-slot from ~/.config/omarchy/shell.toml. Stock Style.qml only honors size-horizontal and size-vertical.",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}
