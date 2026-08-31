@@ -18,6 +18,9 @@ Column {
   property color accent: Color.accent
   property string fontFamily: bar ? bar.fontFamily : Style.font.family
   property var run: bar && typeof bar.run === "function" ? bar.run : function() {}
+  // When true, hide the Power hero/stats — the host panel (omarchy.power)
+  // already shows battery. Only pills + Automatic + Lock + actions remain.
+  property bool embedInPowerPanel: false
 
   property var status: ({
     mode: "performance",
@@ -119,6 +122,13 @@ Column {
     }
   }
 
+  Timer {
+    interval: 1000
+    running: root.visible
+    repeat: true
+    onTriggered: statusFile.reload()
+  }
+
   Component.onCompleted: statusFile.reload()
   onVisibleChanged: if (visible) statusFile.reload()
 
@@ -144,8 +154,9 @@ Column {
 
   // ---------- Hero ----------
   Item {
+    visible: !root.embedInPowerPanel
     width: parent.width
-    implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, heroTdp.implicitHeight)
+    implicitHeight: visible ? Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, heroTdp.implicitHeight) : 0
 
     Text {
       id: heroIcon
@@ -202,6 +213,7 @@ Column {
 
   // ---------- Stats ----------
   Row {
+    visible: !root.embedInPowerPanel
     width: parent.width
     spacing: Style.space(20)
 
@@ -220,7 +232,10 @@ Column {
     }
   }
 
-  PanelSeparator { foreground: root.foreground }
+  PanelSeparator {
+    visible: !root.embedInPowerPanel
+    foreground: root.foreground
+  }
 
   // ---------- Profile picker ----------
   Column {

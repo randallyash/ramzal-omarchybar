@@ -7,22 +7,22 @@
           "id": "ramzal.indicators"
         },
         {
-          "format": "dddd HH:mm",
-          "formatAlt": "d MMMM 'W'ww yyyy",
-          "id": "ramzal.clock",
-          "verticalFormat": "HH\n—\nmm"
-        },
-        {
           "id": "omarchy.keyboard-layout"
         },
         {
-          "id": "omarchy.weather"
+          "id": "ramzal.clock",
+          "format": "ddd d MMM h:mm AP",
+          "formatAlt": "d MMMM 'W'ww yyyy",
+          "verticalFormat": "HH\n—\nmm"
         },
         {
           "alertMinIntensity": "Moderate",
           "alertRadiusKm": 100,
           "alertsEnabled": true,
           "id": "eduardodallecort.weather-radar"
+        },
+        {
+          "id": "omarchy.weather"
         },
         {
           "id": "omarchy.system-update"
@@ -47,6 +47,10 @@
           "id": "ramzal.tray",
           "pinned": [
             "steam"
+          ],
+          "hidden": [
+            "z13-power",
+            "z13-power-service"
           ]
         },
         {
@@ -62,7 +66,8 @@
           "id": "omarchy.monitor"
         },
         {
-          "id": "omarchy.power"
+          "id": "z13.power",
+          "showPercentage": false
         }
       ]
     },
@@ -71,12 +76,25 @@
   },
   "idle": {
     "lock": 480,
-    "screensaver": 240
+    "screensaver": 240,
+    "sleep": 900
   },
   "plugins": [
     {
       "id": "ramzal.bar-icons"
+    },
+    {
+      "id": "z13.battery"
     }
   ],
-  "version": 1
+  "version": 1,
+  "disabledPlugins": [
+    "omarchy.battery",
+    "omarchy.power",
+    "ramzal.power",
+    "ramzal.battery"
+  ],
+  "cloneSourceRestores": [
+    "ramzal.battery"
+  ]
 }

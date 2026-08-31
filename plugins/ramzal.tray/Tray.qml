@@ -310,6 +310,7 @@ BarWidget {
       var item = values[i]
       if (item.status === Status.Passive) continue
       if (ownedByOmarchy(item)) continue
+      if (TrayModel.isZ13Power(item)) continue
       if (category === "all") {
         result.push(item)
         continue

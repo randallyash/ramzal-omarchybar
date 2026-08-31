@@ -44,6 +44,7 @@ function layoutHasWidget(layout, id) {
 function ownedByOmarchy(item, layout) {
   return itemNamed(item, "localsend")
     || (layoutHasWidget(layout, "omarchy.dropbox") && itemNamed(item, "dropbox"))
+    || itemNamed(item, "z13-power")
 }
 
 if (typeof module !== "undefined") {

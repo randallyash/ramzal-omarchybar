@@ -11,3 +11,6 @@ icon-slot = 40
 icon-canvas = 26
 icon-font = 21
 status-slot = 32
+
+[font]
+base-size = 12
