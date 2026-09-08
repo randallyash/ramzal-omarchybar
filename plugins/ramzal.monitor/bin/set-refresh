@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# Set the focused monitor's refresh rate and/or VRR, persist in monitors.lua.
+# Usage: set-refresh [--rate HZ] [--vrr 0|1|2] [--status]
+
+set -euo pipefail
+
+rate=""
+vrr=""
+status_only=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --rate)
+      rate="${2:-}"
+      shift 2
+      ;;
+    --vrr)
+      vrr="${2:-}"
+      shift 2
+      ;;
+    --status)
+      status_only=1
+      shift
+      ;;
+    *)
+      if [[ $1 =~ ^[0-9]+([.][0-9]+)?$ && -z $rate ]]; then
+        rate="$1"
+        shift
+      else
+        echo "Usage: set-refresh [--rate HZ] [--vrr 0|1|2] [--status]" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -n $rate && ! $rate =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  echo "Invalid refresh rate" >&2
+  exit 1
+fi
+if [[ -n $vrr && ! $vrr =~ ^[012]$ ]]; then
+  echo "Invalid VRR mode" >&2
+  exit 1
+fi
+
+monitor_info=$(hyprctl monitors -j | jq -e -c '.[] | select(.focused == true)')
+name=$(printf '%s\n' "$monitor_info" | jq -r '.name')
+width=$(printf '%s\n' "$monitor_info" | jq -r '.width')
+height=$(printf '%s\n' "$monitor_info" | jq -r '.height')
+scale=$(printf '%s\n' "$monitor_info" | jq -r '.scale')
+current_hz=$(printf '%s\n' "$monitor_info" | jq -r '.refreshRate')
+vrr_active=$(printf '%s\n' "$monitor_info" | jq -r '.vrr')
+
+if [[ ! $name =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "Refusing unsafe monitor name" >&2
+  exit 1
+fi
+
+lua="${HOME}/.config/hypr/monitors.lua"
+
+lua_vrr=$(python3 - "$lua" "$name" <<'PY'
+import pathlib, re, sys
+path = pathlib.Path(sys.argv[1])
+name = sys.argv[2]
+text = path.read_text() if path.is_file() else ""
+named = re.search(
+    rf'^hl\.monitor\(\{{[^}}]*output\s*=\s*"{re.escape(name)}"[^}}]*vrr\s*=\s*([0-2])',
+    text,
+    re.M,
+)
+if named:
+    print(named.group(1))
+    raise SystemExit
+catch = re.search(r'^hl\.monitor\(\{[^}]*output\s*=\s*""[^}]*vrr\s*=\s*([0-2])', text, re.M)
+print(catch.group(1) if catch else "0")
+PY
+)
+
+hz_int=$(awk -v n="${rate:-$current_hz}" 'BEGIN { printf "%d", int(n + 0.5) }')
+vrr_mode="${vrr:-$lua_vrr}"
+
+if (( status_only )); then
+  python3 - "$hz_int" "$vrr_mode" "$vrr_active" <<'PY'
+import json, sys
+print(json.dumps({
+    "refresh": int(sys.argv[1]),
+    "vrr": int(sys.argv[2]),
+    "vrrActive": sys.argv[3].lower() == "true",
+}))
+PY
+  exit 0
+fi
+
+eval_out=$(hyprctl eval "hl.monitor({ output = \"$name\", mode = \"${width}x${height}@${hz_int}\", position = \"auto\", scale = $scale, vrr = $vrr_mode })" 2>&1)
+if [[ $eval_out != ok ]]; then
+  echo "$eval_out" >&2
+  exit 1
+fi
+
+[[ -f $lua ]] || exit 0
+cp -a "$lua" "$lua.bak.refresh"
+
+python3 - "$lua" "$name" "$width" "$height" "$hz_int" "$vrr_mode" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+name, width, height, hz, vrr = sys.argv[2:7]
+text = path.read_text()
+line = (
+    f'hl.monitor({{ output = "{name}", mode = "{width}x{height}@{hz}", '
+    f'position = "auto", scale = omarchy_monitor_scale, vrr = {vrr} }})'
+)
+named = re.compile(
+    rf'^hl\.monitor\(\{{\s*output\s*=\s*"{re.escape(name)}".*\}}\)\s*$',
+    re.M,
+)
+if named.search(text):
+    text = named.sub(line, text, count=1)
+else:
+    catch = re.compile(r'^hl\.monitor\(\{\s*output\s*=\s*""', re.M)
+    match = catch.search(text)
+    if match:
+        text = text[: match.start()] + line + "\n" + text[match.start() :]
+    else:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += line + "\n"
+path.write_text(text)
+PY
+
+if [[ -n $vrr ]]; then
+  looknfeel="${HOME}/.config/hypr/looknfeel.lua"
+  if [[ -f $looknfeel ]]; then
+    cp -a "$looknfeel" "$looknfeel.bak.vrr"
+    python3 - "$looknfeel" "$vrr_mode" <<'PY'
+import pathlib, re, sys
+path = pathlib.Path(sys.argv[1])
+vrr = sys.argv[2]
+text = path.read_text()
+new, n = re.subn(
+    r'(misc\s*=\s*\{\s*vrr\s*=\s*)[0-3]',
+    rf'\g<1>{vrr}',
+    text,
+    count=1,
+)
+if n:
+    path.write_text(new)
+PY
+  fi
+  hyprctl keyword misc:vrr "$vrr_mode" >/dev/null
+fi
+
+hyprctl reload >/dev/null
+hyprctl configerrors

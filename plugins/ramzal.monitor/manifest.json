@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "ramzal.monitor",
+  "name": "My Display",
+  "version": "1.0.0",
+  "author": "Omarchy",
+  "description": "Brightness, scale, and refresh rate controls",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "My Display",
+    "description": "Brightness, scale, and refresh rate controls",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.monitor"
+  }
+}

@@ -15,7 +15,7 @@ BarWidget {
   property bool indicatorAreaHovered: false
   property bool indicatorItemHovered: false
   readonly property bool alwaysShowIndicators: setting("alwaysShow", false) === true
-  readonly property bool revealInactiveIndicators: alwaysShowIndicators || indicatorAreaHovered || indicatorItemHovered || (bar && bar.centerSectionRevealHeld === true && bar.centerHoverRevealSuppressed !== true)
+  readonly property bool revealInactiveIndicators: alwaysShowIndicators || indicatorAreaHovered || indicatorItemHovered
 
   signal refreshRequested()
 
@@ -197,7 +197,9 @@ BarWidget {
     Item {
       id: inactiveHorizontalArea
 
-      implicitWidth: root.revealInactiveIndicators ? inactiveHorizontalBlock.implicitWidth : 0
+      // Keep the inactive slots in layout so this strip, not the whole bar,
+      // is the hover target. Icons stay concealed until this area is hovered.
+      implicitWidth: inactiveHorizontalBlock.implicitWidth
       implicitHeight: Math.max(inactiveHorizontalBlock.implicitHeight, root.barSize)
       width: implicitWidth
       height: implicitHeight
@@ -241,7 +243,7 @@ BarWidget {
       id: inactiveVerticalArea
 
       implicitWidth: Math.max(inactiveVerticalBlock.implicitWidth, root.barSize)
-      implicitHeight: root.revealInactiveIndicators ? inactiveVerticalBlock.implicitHeight : 0
+      implicitHeight: inactiveVerticalBlock.implicitHeight
       width: implicitWidth
       height: implicitHeight
       clip: true
@@ -268,10 +270,6 @@ BarWidget {
       horizontal: false
       reportActiveState: root.vertical
     }
-  }
-
-  HoverHandler {
-    onHoveredChanged: root.setIndicatorAreaHovered(hovered)
   }
 
   component ActiveIndicatorBlock: Item {

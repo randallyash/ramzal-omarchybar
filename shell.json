@@ -26,6 +26,9 @@
         },
         {
           "id": "omarchy.system-update"
+        },
+        {
+          "id": "omamail"
         }
       ],
       "left": [
@@ -37,6 +40,15 @@
         },
         {
           "id": "ianswope.apple-music"
+        },
+        {
+          "id": "anders.appletv-remote",
+          "identifier": "8E:6F:7F:24:F5:C1",
+          "maskTextPreview": false,
+          "shortcuts": "{}"
+        },
+        {
+          "id": "io.weirdware.blueferry"
         }
       ],
       "right": [
@@ -54,6 +66,25 @@
           ]
         },
         {
+          "id": "io.github.corck.filesearch"
+        },
+        {
+          "id": "ollywarren.prompt-guide"
+        },
+        {
+          "id": "slw.keyarchy",
+          "enabled": false,
+          "categories": {
+            "window": true,
+            "workspace": true,
+            "launch": true,
+            "focus": true
+          }
+        },
+        {
+          "id": "ussego.otoru"
+        },
+        {
           "id": "omarchy.bluetooth"
         },
         {
@@ -63,7 +94,7 @@
           "id": "omarchy.audio"
         },
         {
-          "id": "omarchy.monitor"
+          "id": "ramzal.monitor"
         },
         {
           "id": "z13.power",
@@ -85,6 +116,13 @@
     },
     {
       "id": "z13.battery"
+    },
+    {
+      "id": "io.github.sirjul1337.lock-explorer",
+      "design": "editorial"
+    },
+    {
+      "id": "bobbynicholas.omaland"
     }
   ],
   "version": 1,
@@ -92,9 +130,11 @@
     "omarchy.battery",
     "omarchy.power",
     "ramzal.power",
-    "ramzal.battery"
+    "ramzal.battery",
+    "omarchy.lock"
   ],
   "cloneSourceRestores": [
-    "ramzal.battery"
+    "ramzal.battery",
+    "io.github.sirjul1337.lock-explorer"
   ]
 }
