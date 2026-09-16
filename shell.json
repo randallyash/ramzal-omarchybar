@@ -4,16 +4,17 @@
     "layout": {
       "center": [
         {
-          "id": "ramzal.indicators"
+          "id": "omarchy.keyboard-layout"
         },
         {
-          "id": "omarchy.keyboard-layout"
+          "id": "ramzal.indicators"
         },
         {
           "id": "ramzal.clock",
           "format": "ddd d MMM h:mm AP",
           "formatAlt": "d MMMM 'W'ww yyyy",
-          "verticalFormat": "HH\n—\nmm"
+          "verticalFormat": "HH\n—\nmm",
+          "weekStartDay": "sunday"
         },
         {
           "alertMinIntensity": "Moderate",
@@ -54,6 +55,14 @@
       "right": [
         {
           "id": "omarchy.agents"
+        },
+        {
+          "id": "akitaonrails.ai-usagebar",
+          "lastSelectedEntryId": "commandcode",
+          "provider": "",
+          "showAll": true,
+          "showProvider": false,
+          "showValue": true
         },
         {
           "id": "ramzal.tray",

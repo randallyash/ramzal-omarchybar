@@ -1,0 +1,30 @@
+[ui]
+primary = "supergrok"
+
+# SuperGrok reads the existing Grok Build login in ~/.grok/auth.json.
+# No API key is required.
+[supergrok]
+enabled = true
+
+# Command Code reuses the official CLI login in ~/.commandcode/auth.json.
+[commandcode]
+enabled = true
+
+# Package defaults enable these, but this machine has no credentials for them.
+# Leaving them on would add error chips once the bar shows every enabled provider.
+[anthropic]
+enabled = false
+
+[openai]
+enabled = false
+
+[zai]
+enabled = false
+
+[openrouter]
+enabled = false
+
+# xAI console prepaid balance needs a Management key, not a Grok Build token.
+# Disabled until a real XAI_MANAGEMENT_KEY is set.
+[grok]
+enabled = false

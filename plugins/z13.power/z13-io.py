@@ -53,6 +53,8 @@ STATUS_KEYS = {
     "profile": str,
     "fill_once": bool,
     "charge_limit": (int, float, type(None)),
+    "tablet": bool,
+    "custom_tdp": (int, float),
 }
 
 

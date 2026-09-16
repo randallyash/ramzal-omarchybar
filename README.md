@@ -8,8 +8,8 @@ Snapshot of `~/.config/omarchy` so it can be cloned onto a fresh Omarchy box.
 ## Layout
 
 Left: menu · workspaces · Apple Music · Apple TV · BlueFerry  
-Center: indicators · keyboard · clock · weather radar · weather · updates · mail  
-Right: agents · tray · file search · prompt guide · Otoru · bluetooth · network · audio · monitor · Z13 power
+Center: keyboard · indicators · clock · weather radar · weather · updates · mail  
+Right: agents · AI usage · tray · file search · prompt guide · Otoru · bluetooth · network · audio · monitor · Z13 power
 
 Idle: screensaver 4 min, lock 8 min, sleep 15 min.
 
@@ -22,6 +22,8 @@ Idle: screensaver 4 min, lock 8 min, sleep 15 min.
 | `plugins/ramzal.*` | User-owned bar plugins (Omarchy clones plus local tweaks) |
 | `plugins/z13.power` | GZ302 battery flyout (Max / Perf / Mid / Quiet / Low) |
 | `plugins/z13.battery` | Low-battery warnings that skip stock powerprofiles |
+| `overlays/akitaonrails.ai-usagebar` | Local frontend patches: Command Code command-key mark and chip spacing |
+| `ai-usagebar.config.toml` | SuperGrok + Command Code enabled; unused default vendors off |
 
 ### ramzal plugins
 
@@ -36,6 +38,7 @@ Idle: screensaver 4 min, lock 8 min, sleep 15 min.
 
 `shell.json` also references third-party plugins that are **not** vendored here:
 
+- `akitaonrails.ai-usagebar` — https://github.com/akitaonrails/ai-usagebar (needs `ai-usagebar-bin`; overlay adds the Command Code mark)
 - `ianswope.apple-music` — https://github.com/ianswope/omarchy-apple-music
 - `eduardodallecort.weather-radar` — https://github.com/eduardodallecort/omarchy-weather-radar
 - `anders.appletv-remote` — https://github.com/andershfranzen/omarchy-atv-remote
@@ -61,7 +64,8 @@ cd ramzal-omarchybar
 ```
 
 `restore.sh` copies `shell.json`, `shell.toml`, `plugins/ramzal.*`, and
-`plugins/z13.*` into `~/.config/omarchy/`, then restarts the shell.
+`plugins/z13.*` into `~/.config/omarchy/`, applies the usage-bar overlay
+and config if present, then restarts the shell.
 
 By hand:
 
@@ -75,6 +79,8 @@ omarchy restart shell
 Optional third-party plugins:
 
 ```bash
+omarchy pkg aur add ai-usagebar-bin
+omarchy plugin add https://github.com/akitaonrails/ai-usagebar.git --enable
 omarchy plugin add https://github.com/ianswope/omarchy-apple-music.git --enable
 omarchy plugin add https://github.com/eduardodallecort/omarchy-weather-radar.git --enable
 omarchy plugin add https://github.com/andershfranzen/omarchy-atv-remote.git --enable
