@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Bounded, descriptor-relative I/O for the Z13 Power Omarchy plugin.
 
 Every file and child process used by the persistent shell goes through this
@@ -9,6 +9,7 @@ operations use dir_fd / /proc/self/fd.
 from __future__ import annotations
 
 import argparse
+import errno
 import fcntl
 import json
 import os
@@ -20,6 +21,7 @@ import stat
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 
 MAX_FILE_BYTES = 16 * 1024
 MAX_PROC_BYTES = 32 * 1024
@@ -29,11 +31,98 @@ MAX_STATUS_STRING = 64
 DEFAULT_TIMEOUT = 3.0
 DIAGNOSE_TIMEOUT = 8.0
 
-Z13CTL_MIN = (1, 3, 2)
-Z13_POWER_MIN = (1, 1, 0)
-Z13CTL_PATH = ("bin", "z13ctl")
-Z13_POWER_PATH = ("share", "z13-power-management", "z13-power")
-Z13_SETTINGS_PATH = ("share", "z13-power-management", "z13-power-settings")
+# Group- or world-writable path components are not a trusted exec chain,
+# even when root-owned (the caller may be in that group).
+UNTRUSTED_WRITE = stat.S_IWGRP | stat.S_IWOTH
+
+
+@dataclass(frozen=True)
+class Pin:
+    name: str
+    rel: tuple[str, ...]
+    executable: bool = True
+    path: str = ""
+
+
+# z13-power 1.2.0 owns PPT, fans, lighting, and undervolt. Trust is the
+# root-owned /usr chain plus that version, not a digest of z13ctl.
+Z13_POWER_MIN = (1, 2, 0)
+PIN_Z13_POWER = Pin(
+    name="z13-power",
+    rel=("share", "z13-power-management", "z13-power"),
+    path="/usr/share/z13-power-management/z13-power",
+)
+PIN_Z13_SETTINGS = Pin(
+    name="z13-power-settings",
+    rel=("share", "z13-power-management", "z13-power-settings"),
+    path="/usr/share/z13-power-management/z13-power-settings",
+)
+PIN_Z13_COMMON = Pin(
+    name="z13_power_common.py",
+    rel=("share", "z13-power-management", "z13_power_common.py"),
+    executable=False,
+    path="/usr/share/z13-power-management/z13_power_common.py",
+)
+PIN_Z13_THEME = Pin(
+    name="z13_power_theme.py",
+    rel=("share", "z13-power-management", "z13_power_theme.py"),
+    executable=False,
+    path="/usr/share/z13-power-management/z13_power_theme.py",
+)
+PIN_Z13_IO = Pin(
+    name="z13_power_io.py",
+    rel=("share", "z13-power-management", "z13_power_io.py"),
+    executable=False,
+    path="/usr/share/z13-power-management/z13_power_io.py",
+)
+
+ENV_KEEP = (
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LANGUAGE",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "LC_TIME",
+    "TZ",
+    "TERM",
+    "DISPLAY",
+    "WAYLAND_DISPLAY",
+    "XAUTHORITY",
+    "XDG_RUNTIME_DIR",
+    "XDG_SESSION_TYPE",
+    "XDG_CURRENT_DESKTOP",
+    "XDG_CONFIG_HOME",
+    "XDG_STATE_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
+    "DBUS_SESSION_BUS_ADDRESS",
+    "HYPRLAND_INSTANCE_SIGNATURE",
+    "QT_QPA_PLATFORM",
+    "QT_QPA_PLATFORMTHEME",
+    "QT_STYLE_OVERRIDE",
+    "OMARCHY_PATH",
+)
+
+
+def trusted_env() -> dict[str, str]:
+    """Minimal env: PATH cannot reach user locations; Python cannot import them."""
+    env: dict[str, str] = {}
+    for key in ENV_KEEP:
+        val = os.environ.get(key)
+        if val:
+            env[key] = val
+    env["PATH"] = "/usr/bin"
+    env["IFS"] = " \t\n"
+    env["PYTHONNOUSERSITE"] = "1"
+    env["PYTHONSAFEPATH"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["XDG_DATA_DIRS"] = os.environ.get("XDG_DATA_DIRS") or "/usr/share"
+    env["XDG_CONFIG_DIRS"] = os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg"
+    return env
+
 OMARCHY_BIN = {
     "omarchy-battery-status": ("bin", "omarchy-battery-status"),
     "omarchy-powerprofiles-list": ("bin", "omarchy-powerprofiles-list"),
@@ -77,6 +166,8 @@ def open_anchor(path: str, *, owner: int | None) -> int:
             fail(f"anchor is not a directory: {path}")
         if owner is not None and st.st_uid != owner:
             fail(f"anchor not owned as required: {path}")
+        if st.st_mode & UNTRUSTED_WRITE:
+            fail(f"anchor is group- or world-writable: {path}")
         return fd
     except Exception:
         os.close(fd)
@@ -101,19 +192,23 @@ def _check_dir(st: os.stat_result, *, owner: int | None) -> None:
         fail("path component is not a directory")
     if owner is not None and st.st_uid != owner:
         fail("directory owner mismatch")
-    if st.st_mode & stat.S_IWOTH and not (st.st_mode & stat.S_ISVTX):
-        fail("world-writable directory")
+    if st.st_mode & UNTRUSTED_WRITE:
+        fail("directory is group- or world-writable")
 
 
-def _check_reg_exec(st: os.stat_result) -> None:
+def _check_reg_trusted(st: os.stat_result, *, executable: bool) -> None:
     if not stat.S_ISREG(st.st_mode):
         fail("not a regular file")
     if st.st_uid != 0:
-        fail("binary is not root-owned")
-    if st.st_mode & stat.S_IWOTH:
-        fail("binary is world-writable")
-    if st.st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) == 0:
+        fail("file is not root-owned")
+    if st.st_mode & UNTRUSTED_WRITE:
+        fail("file is group- or world-writable")
+    if executable and st.st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) == 0:
         fail("binary is not executable")
+
+
+def _check_reg_exec(st: os.stat_result) -> None:
+    _check_reg_trusted(st, executable=True)
 
 
 def openat_dir(parent_fd: int, name: str, *, owner: int | None, create: bool = False, mode: int = 0o700) -> int:
@@ -341,26 +436,70 @@ def cmd_write_command(payload: str) -> None:
         os.close(dirfd)
 
 
-def open_usr_file(rel: tuple[str, ...]) -> int:
+def _open_same_dir_symlink(dirfd: int, name: str) -> int:
+    """Follow one same-directory symlink (e.g. /usr/bin/python3 -> python3.14)."""
+    try:
+        target = os.readlink(name, dir_fd=dirfd)
+    except OSError:
+        fail("cannot read symlink")
+    if target in ("", ".", "..") or "/" in target or "\x00" in target:
+        fail("symlink target not a same-directory name")
+    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dirfd)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            fail("symlink target is not a regular file")
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def open_usr_file(rel: tuple[str, ...], *, executable: bool = True, allow_same_dir_symlink: bool = False) -> int:
     usr = trusted_usr_fd()
     try:
         *dirs, name = rel
         dirfd = usr
         close_dir = False
         if dirs:
-            # first component after /usr
             dirfd = walk_dirs(usr, list(dirs), owner=0)
             close_dir = True
         try:
-            fd = openat_file(dirfd, name, os.O_RDONLY)
+            try:
+                fd = openat_file(dirfd, name, os.O_RDONLY)
+            except OSError as e:
+                if not allow_same_dir_symlink or e.errno != errno.ELOOP:
+                    raise
+                fd = _open_same_dir_symlink(dirfd, name)
             st = os.fstat(fd)
-            _check_reg_exec(st)
+            _check_reg_trusted(st, executable=executable)
             return fd
         finally:
             if close_dir:
                 os.close(dirfd)
     finally:
         os.close(usr)
+
+
+def require_interpreter() -> None:
+    """Refuse to run if this process is not the trusted /usr/bin/python3."""
+    fd = open_usr_file(("bin", "python3"), executable=True, allow_same_dir_symlink=True)
+    try:
+        want = os.fstat(fd)
+        try:
+            exe = os.open(os.path.realpath(sys.executable), os.O_RDONLY | os.O_CLOEXEC)
+        except OSError:
+            fail("cannot open current interpreter")
+        try:
+            got = os.fstat(exe)
+        finally:
+            os.close(exe)
+        if (want.st_dev, want.st_ino) != (got.st_dev, got.st_ino):
+            fail("interpreter is not trusted /usr/bin/python3")
+        if want.st_uid != 0 or want.st_mode & UNTRUSTED_WRITE:
+            fail("interpreter ownership/mode rejected")
+    finally:
+        os.close(fd)
 
 
 def clear_cloexec(fd: int) -> None:
@@ -435,17 +574,28 @@ def bounded_collect(proc: subprocess.Popen, timeout: float, max_out: int, max_er
                 return bytes(out), bytes(err), rc
 
 
-def spawn_fd(fd: int, extra_argv: list[str], timeout: float, max_out: int, max_err: int) -> tuple[bytes, int]:
+def spawn_fd(
+    fd: int,
+    extra_argv: list[str],
+    timeout: float,
+    max_out: int,
+    max_err: int,
+    *,
+    extra_fds: tuple[int, ...] = (),
+) -> tuple[bytes, int]:
     clear_cloexec(fd)
+    for extra in extra_fds:
+        clear_cloexec(extra)
     proc_path = f"/proc/self/fd/{fd}"
     argv = [proc_path, *extra_argv]
     proc = subprocess.Popen(
         argv,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=trusted_env(),
         start_new_session=True,
         close_fds=True,
-        pass_fds=(fd,),
+        pass_fds=(fd, *extra_fds),
     )
     try:
         out, _err, rc = bounded_collect(proc, timeout, max_out, max_err)
@@ -456,39 +606,26 @@ def spawn_fd(fd: int, extra_argv: list[str], timeout: float, max_out: int, max_e
 
 
 def parse_semver(text: str) -> tuple[int, int, int] | None:
-    m = re.search(r"(\d+)\.(\d+)\.(\d+)", text)
-    if not m:
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", text)
+    if not match:
         return None
-    return int(m.group(1)), int(m.group(2)), int(m.group(3))
-
-
-def require_z13ctl() -> None:
-    fd = open_usr_file(Z13CTL_PATH)
-    try:
-        out, rc = spawn_fd(fd, ["--version"], 2.0, 256, 256)
-    finally:
-        os.close(fd)
-    ver = parse_semver(out.decode("utf-8", "replace"))
-    if ver is None or ver < Z13CTL_MIN:
-        fail(
-            f"z13ctl-bin {Z13CTL_MIN[0]}.{Z13CTL_MIN[1]}.{Z13CTL_MIN[2]}+ required "
-            f"(https://github.com/dahui/z13ctl, AUR z13ctl-bin); got {out!r}"
-        )
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
 
 
 def require_z13_power() -> None:
-    fd = open_usr_file(Z13_POWER_PATH)
+    """Root-owned z13-power at 1.2.0 or newer. That release owns the hardware."""
+    fd = open_usr_file(PIN_Z13_POWER.rel)
     try:
         out, rc = spawn_fd(fd, ["--version"], 2.0, 256, 256)
     finally:
         os.close(fd)
     ver = parse_semver(out.decode("utf-8", "replace"))
-    if ver is None or ver < Z13_POWER_MIN:
+    if rc not in (0, None) or ver is None or ver < Z13_POWER_MIN:
         fail(
             "z13-power "
             f"{Z13_POWER_MIN[0]}.{Z13_POWER_MIN[1]}.{Z13_POWER_MIN[2]}+ required "
-            "(https://github.com/randallyash/rog-z13-power-management, "
-            "package z13-power-git); install/upgrade then retry"
+            "(built-in hardware control; /usr/bin/z13ctl is not used); "
+            f"got {out.decode('utf-8', 'replace').strip()!r}"
         )
 
 
@@ -498,28 +635,35 @@ def cmd_run(argv: list[str], timeout: float, max_bytes: int) -> None:
     name = os.path.basename(argv[0])
     extra = argv[1:]
     if name in OMARCHY_BIN:
-        rel = OMARCHY_BIN[name]
-        fd = open_usr_file(rel)
+        fd = open_usr_file(OMARCHY_BIN[name])
+        extra_fds: tuple[int, ...] = ()
     elif name == "z13-power":
-        require_z13ctl()
         require_z13_power()
-        fd = open_usr_file(Z13_POWER_PATH)
+        fd = open_usr_file(PIN_Z13_POWER.rel)
+        extra_fds = ()
     else:
         fail(f"command not allowed: {name}")
     try:
-        out, rc = spawn_fd(fd, extra, timeout, max_bytes, MAX_ERR_BYTES)
+        out, rc = spawn_fd(fd, extra, timeout, max_bytes, MAX_ERR_BYTES, extra_fds=extra_fds)
     finally:
         os.close(fd)
+        for extra in extra_fds:
+            os.close(extra)
     sys.stdout.buffer.write(out)
     if rc not in (0, None):
         raise SystemExit(rc)
 
 
 def cmd_spawn_settings() -> None:
-    fd = open_usr_file(Z13_SETTINGS_PATH)
+    require_z13_power()
+    held: list[int] = []
     try:
-        clear_cloexec(fd)
-        proc_path = f"/proc/self/fd/{fd}"
+        for pin in (PIN_Z13_IO, PIN_Z13_COMMON, PIN_Z13_THEME, PIN_Z13_SETTINGS):
+            held.append(open_usr_file(pin.rel, executable=pin.executable))
+        for fd in held:
+            clear_cloexec(fd)
+        child_env = trusted_env()
+        proc_path = f"/proc/self/fd/{held[-1]}"
         pid = os.fork()
         if pid == 0:
             try:
@@ -528,12 +672,16 @@ def cmd_spawn_settings() -> None:
                 os.dup2(devnull, 0)
                 os.dup2(devnull, 1)
                 os.dup2(devnull, 2)
-                os.execv(proc_path, [proc_path])
+                os.execve(proc_path, [proc_path], child_env)
             except Exception:
                 os._exit(127)
         # Parent returns immediately; the settings window is a long-lived UI.
     finally:
-        os.close(fd)
+        for fd in held:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def cmd_read_hwmon() -> None:
@@ -632,20 +780,24 @@ def cmd_read_hwmon() -> None:
 
 
 def cmd_check_deps() -> None:
-    require_z13ctl()
+    """Confirm the built-in controller is installed. Does not look at z13ctl."""
     require_z13_power()
-    print(
-        json.dumps(
-            {
-                "z13ctl_min": f"{Z13CTL_MIN[0]}.{Z13CTL_MIN[1]}.{Z13CTL_MIN[2]}",
-                "z13_power_min": f"{Z13_POWER_MIN[0]}.{Z13_POWER_MIN[1]}.{Z13_POWER_MIN[2]}",
-            },
-            separators=(",", ":"),
-        )
-    )
+    fd = open_usr_file(PIN_Z13_POWER.rel)
+    try:
+        out, _rc = spawn_fd(fd, ["--version"], 2.0, 256, 256)
+    finally:
+        os.close(fd)
+    print(json.dumps({
+        "z13-power": {
+            "version": out.decode("utf-8", "replace").strip(),
+            "path": PIN_Z13_POWER.path,
+            "z13ctl": "not used",
+        }
+    }, separators=(",", ":")))
 
 
 def main() -> None:
+    require_interpreter()
     parser = argparse.ArgumentParser(prog="z13-io")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("read-status")
